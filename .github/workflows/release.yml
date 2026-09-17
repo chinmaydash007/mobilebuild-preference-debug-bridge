@@ -1,0 +1,119 @@
+name: Prepare Maven Central release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable release tag, for example v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  central:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate tag and version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$(git cat-file -t "$RELEASE_TAG")" = "tag"
+          expected="${RELEASE_TAG#v}"
+          actual="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
+          test "$expected" = "$actual"
+
+      - name: Verify release inputs
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          test -n "$CENTRAL_TOKEN_USERNAME"
+          test -n "$CENTRAL_TOKEN_PASSWORD"
+          test -n "$SIGNING_KEY"
+          test -n "$SIGNING_PASSWORD"
+
+      - name: Build and verify
+        run: |
+          ./gradlew clean test lint \
+            :preference-debug-bridge:assembleRelease \
+            :sample:assembleDebug :sample:assembleRelease \
+            publishToMavenLocal
+          ./gradlew -p consumer-fixture \
+            :app:assembleDebug :app:assembleRelease
+          python3 scripts/verify_manifests.py
+
+      - name: Create signed Central bundle
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: ./gradlew :preference-debug-bridge:centralBundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: central-${{ inputs.tag }}
+          path: preference-debug-bridge/build/central-bundle/*.zip
+          if-no-files-found: error
+
+      - name: Upload for user-managed validation
+        id: upload
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          auth="$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 | tr -d '\n')"
+          bundle="$(find preference-debug-bridge/build/central-bundle -name '*.zip' -type f -print -quit)"
+          deployment_id="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $auth" \
+            --form "bundle=@$bundle;type=application/octet-stream" \
+            "https://central.sonatype.com/api/v1/publisher/upload?name=preference-debug-bridge-${RELEASE_TAG#v}&publishingType=USER_MANAGED")"
+          test -n "$deployment_id"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Central validation
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          DEPLOYMENT_ID: ${{ steps.upload.outputs.deployment_id }}
+        run: |
+          auth="$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 | tr -d '\n')"
+          for attempt in $(seq 1 60); do
+            response="$(curl --fail --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $auth" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$DEPLOYMENT_ID")"
+            state="$(printf '%s' "$response" | jq -r '.deploymentState')"
+            echo "Central deployment state: $state"
+            if [ "$state" = "VALIDATED" ]; then
+              echo "Deployment $DEPLOYMENT_ID is ready for manual publication in Central Portal."
+              exit 0
+            fi
+            if [ "$state" = "FAILED" ]; then
+              printf '%s' "$response" | jq '.errors'
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Central validation did not finish within ten minutes."
+          exit 1
