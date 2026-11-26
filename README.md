@@ -88,14 +88,12 @@ Do not move the provider or dependency into a production source set. Verify the 
 Requirements: JDK 17 and Android SDK 35.
 
 ```bash
-./gradlew test lint \
-  :preference-debug-bridge:assembleRelease \
-  :sample:assembleDebug :sample:assembleRelease \
-  publishToMavenLocal
-
-./gradlew -p consumer-fixture :app:assembleDebug :app:assembleRelease
-python3 scripts/verify_manifests.py
+bash scripts/verify.sh
 ```
+
+Verification stages the unsigned Maven publication under `build/validation-repository`, validates
+its AAR/POM/Gradle metadata/source/documentation contents, and resolves it from an independent
+consumer. It never uploads to Maven Central.
 
 The `sample` app demonstrates plain and AndroidX encrypted preferences while keeping the encryption dependency out of the library. With a device or emulator attached:
 
