@@ -7,21 +7,22 @@ The bridge works with ordinary and encrypted preferences because the host app op
 
 ## Installation
 
-Version `1.1.0` is available from Maven Central under these coordinates:
+Version `1.2.0` is available from Maven Central under these coordinates:
 
 ```kotlin
 dependencies {
     debugImplementation(
-        "io.github.chinmaydash007.mobilebuild:preference-debug-bridge:1.1.0"
+        "io.github.chinmaydash007.mobilebuild:preference-debug-bridge:1.2.0"
     )
 }
 ```
 
-Use `debugImplementation`. The library intentionally contributes no manifest provider, so the host app controls exactly which debug variant exposes the bridge.
+Use a variant-specific dependency. The library intentionally contributes no manifest provider, so
+the host app controls exactly which diagnostic variants expose the bridge.
 
 ## Register stores
 
-Create a provider subclass under `src/debug`:
+Create a provider subclass in a source set included only by the intended diagnostic variants:
 
 ```kotlin
 package com.example.app.debug
@@ -51,7 +52,7 @@ class AppPreferenceDebugProvider : PreferenceDebugProvider() {
 
 The encrypted factory must use the same filename, key alias, key scheme, and value scheme as the app. The bridge has no dependency on AndroidX Security and works with any implementation of `SharedPreferences`.
 
-Declare the subclass in `src/debug/AndroidManifest.xml`:
+Declare the subclass in each enabled variant's manifest:
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -70,6 +71,30 @@ No `Application` call is needed. Android creates the provider automatically. Reg
 
 Each ID must be nonblank and unique. IDs are stable protocol identifiers and do not need to match
 preference filenames.
+
+## Control access from the host app
+
+By default, the bridge accepts requests only when the app is debuggable. An internal
+non-debuggable build can deliberately replace that default with an app-owned decision:
+
+```kotlin
+class AppPreferenceDebugProvider : PreferenceDebugProvider() {
+    override fun isPreferenceInspectionEnabled(context: Context): Boolean =
+        BuildConfig.ENABLE_MOBILE_BUILD_PREFERENCE_INSPECTOR
+
+    override fun registerStores(registry: PreferenceStoreRegistry) {
+        // Register stores here.
+    }
+}
+```
+
+The callback is evaluated for every request and again immediately before a streamed save commits.
+It can combine a BuildConfig allowlist with an internal persisted developer setting. It must be
+fast, thread-safe, and independent of UI state; exceptions fail closed. A disabled app does not
+complete the handshake and is not identified as bridge-enabled by Mobile Build.
+
+Host control never replaces the shell-UID check or the manifest's `android.permission.DUMP`
+requirement. Keep the provider, its dependency, and its enabling flag out of production variants.
 
 ## Discover ordinary preference files
 
@@ -107,7 +132,9 @@ debug app's sandbox; enable it only in trusted internal debug builds.
 
 ## Behavior and security
 
-- The provider accepts calls only when the host application is debuggable and the caller is Android's shell UID.
+- The provider defaults to debuggable-only access; a subclass can explicitly supply a host-owned
+  enablement decision for selected internal variants.
+- The caller must always be Android's shell UID, regardless of the host decision.
 - The manifest requires `android.permission.DUMP`; URI grants are disabled.
 - Version 1 edits existing keys only. It never creates, deletes, or renames keys.
 - Boolean, Int, Long, Float, String, and String Set values are editable. Unknown values remain visible as read-only text.
@@ -116,7 +143,8 @@ debug app's sandbox; enable it only in trusted internal debug builds.
 - Plain-file discovery is opt-in, rejects symlinks and nested paths, and never rewrites XML directly.
 - Requests are limited to 1 MiB. At most 64 request IDs remain active, and acknowledgements expire after two minutes.
 
-Do not move the provider or dependency into a production source set. Verify the release merged manifest before shipping.
+Do not move the provider or dependency into a production source set. Verify the release merged
+manifest before shipping.
 
 ## Development
 
@@ -131,13 +159,20 @@ its AAR/POM/Gradle metadata/source/documentation contents, and resolves it from 
 consumer. It never uploads to Maven Central.
 
 The `sample` app demonstrates registered plain/encrypted preferences plus an opt-in discovered
-plain store while keeping the encryption dependency out of the library. With a device or emulator
-attached:
+plain store while keeping the encryption dependency out of the library. It includes a normal debug
+build and a non-debuggable `hostControlled` build whose provider explicitly opts in. With a device
+or emulator attached:
 
 ```bash
 ./gradlew :sample:assembleDebug
 python3 scripts/device_smoke_test.py \
   --adb "$ANDROID_HOME/platform-tools/adb"
+
+./gradlew :sample:assembleHostControlled
+python3 scripts/device_smoke_test.py \
+  --adb "$ANDROID_HOME/platform-tools/adb" \
+  --package io.github.chinmaydash007.mobilebuild.preferences.sample.hostcontrolled \
+  --apk sample/build/outputs/apk/hostControlled/sample-hostControlled.apk
 ```
 
 On Android 9 (API 28) or newer, the smoke test installs the sample, exercises the same `content read` and streamed `content write` commands used by Mobile Build, and restores every value it changes. The AAR itself retains a minimum SDK of 21; see the compatibility policy for the protocol distinction.

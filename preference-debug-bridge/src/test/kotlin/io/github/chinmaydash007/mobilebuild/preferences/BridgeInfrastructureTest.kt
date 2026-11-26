@@ -10,6 +10,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
 import java.io.ByteArrayInputStream
 import java.io.IOException
 
@@ -55,6 +56,34 @@ class BridgeInfrastructureTest {
     }
 
     @Test
+    fun hostEnablementIsEvaluatedEveryTimeAndFailsClosed() {
+        var enabled = false
+
+        assertFalse(BridgeAccessPolicy.hostAllows { enabled })
+        enabled = true
+        assertTrue(BridgeAccessPolicy.hostAllows { enabled })
+        assertFalse(BridgeAccessPolicy.hostAllows { throw IllegalStateException("fixture") })
+    }
+
+    @Test
+    fun providerDefaultsToDebuggableAndAllowsAnExplicitHostDecision() {
+        val context = mock(Context::class.java)
+        val applicationInfo = ApplicationInfo()
+        `when`(context.applicationInfo).thenReturn(applicationInfo)
+        val defaultProvider = AccessFixtureProvider()
+
+        applicationInfo.flags = 0
+        assertFalse(defaultProvider.enabled(context))
+        applicationInfo.flags = ApplicationInfo.FLAG_DEBUGGABLE
+        assertTrue(defaultProvider.enabled(context))
+
+        applicationInfo.flags = 0
+        assertTrue(AccessFixtureProvider(true).enabled(context))
+        applicationInfo.flags = ApplicationInfo.FLAG_DEBUGGABLE
+        assertFalse(AccessFixtureProvider(false).enabled(context))
+    }
+
+    @Test
     fun boundedInputPreservesBytesAndRejectsOversizedRequests() {
         val bytes = byteArrayOf(0, 1, 2, 127, -1)
         assertTrue(bytes.contentEquals(BridgeIO.readLimited(ByteArrayInputStream(bytes), bytes.size)))
@@ -80,4 +109,15 @@ class BridgeInfrastructureTest {
         assertTrue(results.begin("three"))
         assertEquals("pending", results.read("two").getString("status"))
     }
+}
+
+private class AccessFixtureProvider(
+    private val explicitDecision: Boolean? = null,
+) : PreferenceDebugProvider() {
+    override fun registerStores(registry: PreferenceStoreRegistry) = Unit
+
+    override fun isPreferenceInspectionEnabled(context: Context): Boolean =
+        explicitDecision ?: super.isPreferenceInspectionEnabled(context)
+
+    fun enabled(context: Context): Boolean = isPreferenceInspectionEnabled(context)
 }

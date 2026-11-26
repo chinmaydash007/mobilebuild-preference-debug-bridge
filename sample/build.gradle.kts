@@ -18,7 +18,25 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "ENABLE_PREFERENCE_INSPECTION", "true")
         }
+        create("hostControlled") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".hostcontrolled"
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "ENABLE_PREFERENCE_INSPECTION", "true")
+        }
+    }
+
+    sourceSets {
+        getByName("debug").java.srcDir("src/bridge/kotlin")
+        getByName("hostControlled").java.srcDir("src/bridge/kotlin")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -34,4 +52,6 @@ android {
 dependencies {
     debugImplementation(project(":preference-debug-bridge"))
     debugImplementation("androidx.security:security-crypto:1.1.0-alpha06")
+    add("hostControlledImplementation", project(":preference-debug-bridge"))
+    add("hostControlledImplementation", "androidx.security:security-crypto:1.1.0-alpha06")
 }

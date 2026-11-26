@@ -25,7 +25,7 @@ android {
     }
 }
 
-val bridgeVersion = providers.gradleProperty("bridgeVersion").orElse("1.0.0")
+val bridgeVersion = providers.gradleProperty("bridgeVersion").orElse("1.2.0")
 
 dependencies {
     debugImplementation(

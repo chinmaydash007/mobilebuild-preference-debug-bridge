@@ -41,18 +41,18 @@ workflow run repeats validation and the API 28/API 35 protocol tests, builds the
 verifies every signature against the committed public key, and uploads the evidence as an Actions
 artifact. Manual dispatch never publishes.
 
-## Publish version 1.1.0
+## Publish version 1.2.0
 
-1. Confirm `VERSION_NAME=1.1.0`, the changelog, and the README installation coordinates.
+1. Confirm `VERSION_NAME=1.2.0`, the changelog, and the README installation coordinates.
 2. Confirm the manual signed dry run passed at the exact commit intended for release.
 3. Create and push an annotated tag at that commit:
 
    ```bash
-   git tag -a v1.1.0 -m "Release 1.1.0"
-   git push origin v1.1.0
+   git tag -a v1.2.0 -m "Release 1.2.0"
+   git push origin v1.2.0
    ```
 
-4. Create a GitHub Release using the existing `v1.1.0` tag and publish it. Publishing the GitHub
+4. Create a GitHub Release using the existing `v1.2.0` tag and publish it. Publishing the GitHub
    Release triggers the Central workflow.
 5. The workflow checks the original repository ID, tag/version/commit agreement, `main` ancestry,
    all local and emulator gates, and the signed publication contents. It attaches the Central ZIP,

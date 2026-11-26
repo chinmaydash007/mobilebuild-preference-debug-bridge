@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package io.github.chinmaydash007.mobilebuild.preferences.sample
 
 import android.content.Context
