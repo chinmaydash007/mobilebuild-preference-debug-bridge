@@ -6,7 +6,7 @@ The bridge works with ordinary and encrypted preferences because the host app op
 
 ## Installation
 
-Version `1.0.0` is prepared for Maven Central under these coordinates:
+Version `1.0.0` is available from Maven Central under these coordinates:
 
 ```kotlin
 dependencies {
@@ -17,8 +17,6 @@ dependencies {
 ```
 
 Use `debugImplementation`. The library intentionally contributes no manifest provider, so the host app controls exactly which debug variant exposes the bridge.
-
-Until `1.0.0` is released to Maven Central, run `./gradlew publishToMavenLocal` and consume the same coordinates from `mavenLocal()`.
 
 ## Register stores
 
