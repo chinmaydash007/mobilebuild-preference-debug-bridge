@@ -14,7 +14,11 @@ The AAR has no provider declaration and no runtime dependency on an encryption l
 
 ## Protocol
 
-The Maven major version and ADB protocol version evolve independently. Release `1.0.0` implements protocol `v1`, matching Mobile Build's existing Shared Preferences Inspector.
+The Maven major version and ADB protocol version evolve independently. Releases `1.0.0` and
+`1.1.0` implement protocol `v1`, matching Mobile Build's existing Shared Preferences Inspector.
+
+Release `1.1.0` adds an opt-in plain-file discovery API. Consumers that do not call it retain the
+explicit-registration-only behavior from `1.0.0`.
 
 - Additive JSON fields may be introduced within `v1`; decoders must ignore unknown fields.
 - Route, field, or type changes that would break Mobile Build require a new protocol path such as `/v2`.

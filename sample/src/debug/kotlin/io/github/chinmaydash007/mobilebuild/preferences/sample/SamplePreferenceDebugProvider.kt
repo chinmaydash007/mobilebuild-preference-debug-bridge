@@ -12,5 +12,11 @@ class SamplePreferenceDebugProvider : PreferenceDebugProvider() {
         registry.register("sample-encrypted", "Sample encrypted preferences") { context ->
             SampleEncryptedPreferences.open(context)
         }
+        registry.discoverPlainPreferences(
+            excludedFileNames = setOf(
+                MainActivity.PLAIN_STORE,
+                SampleEncryptedPreferences.FILE_NAME,
+            ),
+        )
     }
 }

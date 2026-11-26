@@ -20,7 +20,7 @@ separate from the library's minimum SDK of 21.
 {"version":1,"packageID":"com.example.debug","label":"Example"}
 ```
 
-`stores` lists registered stores without returning values:
+`stores` lists registered and opt-in discovered stores without returning values:
 
 ```json
 {
@@ -31,10 +31,26 @@ separate from the library's minimum SDK of 21.
       "label": "Settings",
       "kind": "registered",
       "available": true
+    },
+    {
+      "id": "sdk_preferences",
+      "label": "sdk_preferences",
+      "kind": "plain",
+      "available": true
+    },
+    {
+      "id": "unknown_encrypted",
+      "label": "unknown_encrypted",
+      "kind": "unregisteredEncrypted",
+      "available": false,
+      "message": "Register this encrypted store with its app-specific configuration before inspecting it"
     }
   ]
 }
 ```
+
+Discovery remains an app-side opt-in. Suspected encrypted files are descriptors only: snapshot and
+save requests for them fail without returning raw encrypted keys or values.
 
 `store/<base64url-store-id>` returns a snapshot. The ID uses unpadded Base64 URL encoding:
 

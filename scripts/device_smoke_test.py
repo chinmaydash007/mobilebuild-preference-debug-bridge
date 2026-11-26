@@ -143,13 +143,19 @@ def main() -> None:
         if handshake.get("version") != 1 or handshake.get("packageID") != PACKAGE:
             raise AssertionError("Unexpected handshake")
         stores = read_json(arguments.adb, arguments.serial, "stores")
-        available = {store["id"] for store in stores["stores"] if store.get("available")}
-        if available != {"sample-plain", "sample-encrypted"}:
-            raise AssertionError("Expected both registered sample stores")
+        descriptors = {store["id"]: store for store in stores["stores"]}
+        expected = {"sample-plain", "sample-encrypted", "sample_discovered"}
+        if set(descriptors) != expected:
+            raise AssertionError(f"Unexpected sample stores: {sorted(descriptors)}")
+        if any(not descriptors[store_id].get("available") for store_id in expected):
+            raise AssertionError("Expected every sample store to be available")
+        if descriptors["sample_discovered"].get("kind") != "plain":
+            raise AssertionError("Expected the unregistered sample store to be discovered as plain")
 
         toggle_and_restore(arguments.adb, arguments.serial, "sample-plain", "sample.boolean")
         toggle_and_restore(arguments.adb, arguments.serial, "sample-encrypted", "secure.enabled")
-        print("ADB v1 read/write/restore passed for plain and encrypted stores.")
+        toggle_and_restore(arguments.adb, arguments.serial, "sample_discovered", "discovered.enabled")
+        print("ADB v1 read/write/restore passed for registered and discovered stores.")
     finally:
         if not arguments.keep_installed:
             run(arguments.adb, arguments.serial, ["uninstall", PACKAGE])

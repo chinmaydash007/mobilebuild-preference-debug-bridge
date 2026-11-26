@@ -23,6 +23,14 @@ class MainActivity : Activity() {
                 .commit()
         }
 
+        val discoveredPreferences = getSharedPreferences(DISCOVERED_STORE, Context.MODE_PRIVATE)
+        if (!discoveredPreferences.contains("discovered.enabled")) {
+            discoveredPreferences.edit()
+                .putBoolean("discovered.enabled", true)
+                .putString("discovered.source", "plain preference discovery")
+                .commit()
+        }
+
         val density = resources.displayMetrics.density
         val padding = (24 * density).toInt()
         val layout = LinearLayout(this).apply {
@@ -49,5 +57,6 @@ class MainActivity : Activity() {
 
     companion object {
         const val PLAIN_STORE = "sample_plain"
+        const val DISCOVERED_STORE = "sample_discovered"
     }
 }
