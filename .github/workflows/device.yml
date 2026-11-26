@@ -44,7 +44,4 @@ jobs:
           disable-animations: true
           script: |
             python3 scripts/device_smoke_test.py --adb "$ANDROID_HOME/platform-tools/adb"
-            python3 scripts/device_smoke_test.py \
-              --adb "$ANDROID_HOME/platform-tools/adb" \
-              --package io.github.chinmaydash007.mobilebuild.preferences.sample.hostcontrolled \
-              --apk sample/build/outputs/apk/hostControlled/sample-hostControlled.apk
+            python3 scripts/device_smoke_test.py --adb "$ANDROID_HOME/platform-tools/adb" --package io.github.chinmaydash007.mobilebuild.preferences.sample.hostcontrolled --apk sample/build/outputs/apk/hostControlled/sample-hostControlled.apk
