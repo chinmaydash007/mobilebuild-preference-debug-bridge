@@ -16,10 +16,18 @@ internal object BridgeProtocol {
 }
 
 internal object BridgeAccessPolicy {
+    const val HOST_DISABLED_MESSAGE = "Preference inspection is disabled by the host app"
+
     fun isDebuggable(applicationFlags: Int): Boolean =
         applicationFlags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     fun isShell(callingUid: Int): Boolean = callingUid == Process.SHELL_UID
+
+    fun hostAllows(check: () -> Boolean): Boolean = try {
+        check()
+    } catch (_: Exception) {
+        false
+    }
 
     fun isAllowed(applicationFlags: Int, callingUid: Int): Boolean =
         isDebuggable(applicationFlags) && isShell(callingUid)

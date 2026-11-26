@@ -14,19 +14,31 @@ import java.io.FileNotFoundException
 import java.util.UUID
 
 /**
- * Debug-only content provider used by Mobile Build to inspect registered SharedPreferences.
+ * App-declared content provider used by Mobile Build to inspect registered SharedPreferences.
  *
  * The library does not add this provider to an application manifest. A consumer must subclass it
- * from `src/debug`, register only the intended stores, and declare that subclass in the debug
- * manifest with `android.permission.DUMP`.
+ * in an explicitly selected diagnostic source set, register only the intended stores, and declare
+ * that subclass with `android.permission.DUMP`.
  */
 abstract class PreferenceDebugProvider : ContentProvider() {
     private val registry = PreferenceStoreRegistry()
     private val results = SaveResultStore()
     private val saveLock = Any()
 
-    /** Registers the stores exposed by this application's debug build. */
+    /** Registers the stores exposed by this application's diagnostic build. */
     protected abstract fun registerStores(registry: PreferenceStoreRegistry)
+
+    /**
+     * Returns whether this app build currently permits preference inspection.
+     *
+     * The default preserves the original debuggable-app requirement. Apps that deliberately ship
+     * the provider in a non-debuggable internal build can override this method and use a BuildConfig
+     * field or an app-owned persisted developer setting. This callback can run on Binder or worker
+     * threads and may be evaluated repeatedly, so it must be fast, thread-safe, and UI-independent.
+     * Exceptions fail closed.
+     */
+    protected open fun isPreferenceInspectionEnabled(context: Context): Boolean =
+        BridgeAccessPolicy.isDebuggable(context.applicationInfo.flags)
 
     final override fun onCreate(): Boolean {
         if (context == null) return false
@@ -71,13 +83,20 @@ abstract class PreferenceDebugProvider : ContentProvider() {
     private fun checkCaller() {
         val app = context ?: throw SecurityException("No app context")
         val callingUID = Binder.getCallingUid()
-        if (!BridgeAccessPolicy.isDebuggable(app.applicationInfo.flags)) {
-            throw SecurityException("Preference inspection requires a debuggable app")
-        }
         if (!BridgeAccessPolicy.isShell(callingUID)) {
             throw SecurityException("Preference inspection requires an ADB shell (caller UID $callingUID)")
         }
+        checkHostEnabled(app)
     }
+
+    private fun checkHostEnabled(app: Context) {
+        if (!hostEnabled(app)) {
+            throw SecurityException(BridgeAccessPolicy.HOST_DISABLED_MESSAGE)
+        }
+    }
+
+    private fun hostEnabled(app: Context): Boolean =
+        BridgeAccessPolicy.hostAllows { isPreferenceInspectionEnabled(app) }
 
     private fun outputPipe(payload: JSONObject): ParcelFileDescriptor {
         val pipe = ParcelFileDescriptor.createPipe()
@@ -99,7 +118,11 @@ abstract class PreferenceDebugProvider : ContentProvider() {
                 val bytes = ParcelFileDescriptor.AutoCloseInputStream(pipe[0]).use { input ->
                     BridgeIO.readLimited(input, BridgeProtocol.MAX_REQUEST_BYTES)
                 }
-                save(JSONObject(String(bytes, Charsets.UTF_8)))
+                if (hostEnabled(appContext())) {
+                    save(JSONObject(String(bytes, Charsets.UTF_8)))
+                } else {
+                    failed(BridgeAccessPolicy.HOST_DISABLED_MESSAGE)
+                }
             } catch (_: Exception) {
                 failed("Could not validate or save the preference request")
             }

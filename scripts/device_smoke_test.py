@@ -12,9 +12,8 @@ import uuid
 from pathlib import Path
 
 
-PACKAGE = "io.github.chinmaydash007.mobilebuild.preferences.sample.debug"
+DEFAULT_PACKAGE = "io.github.chinmaydash007.mobilebuild.preferences.sample.debug"
 ACTIVITY = "io.github.chinmaydash007.mobilebuild.preferences.sample.MainActivity"
-AUTHORITY = f"{PACKAGE}.mobilebuild.preferences"
 
 
 def run(
@@ -46,11 +45,11 @@ def execute(
     return subprocess.run(command, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-def read_json(adb: str, serial: str | None, path: str) -> dict:
+def read_json(adb: str, serial: str | None, authority: str, path: str) -> dict:
     result = execute(
         adb,
         serial,
-        ["exec-out", "content", "read", "--uri", f"content://{AUTHORITY}/v1/{path}"],
+        ["exec-out", "content", "read", "--uri", f"content://{authority}/v1/{path}"],
     )
     output = result.stdout.decode(errors="replace").strip()
     error = result.stderr.decode(errors="replace").strip()
@@ -68,12 +67,20 @@ def store_segment(store_id: str) -> str:
     return base64.urlsafe_b64encode(store_id.encode()).decode().rstrip("=")
 
 
-def snapshot(adb: str, serial: str | None, store_id: str) -> dict[str, dict]:
-    payload = read_json(adb, serial, f"store/{store_segment(store_id)}")
+def snapshot(adb: str, serial: str | None, authority: str, store_id: str) -> dict[str, dict]:
+    payload = read_json(adb, serial, authority, f"store/{store_segment(store_id)}")
     return {entry["key"]: entry["value"] for entry in payload["entries"]}
 
 
-def save(adb: str, serial: str | None, store_id: str, key: str, before: dict, after: dict) -> None:
+def save(
+    adb: str,
+    serial: str | None,
+    authority: str,
+    store_id: str,
+    key: str,
+    before: dict,
+    after: dict,
+) -> None:
     request_id = str(uuid.uuid4())
     request = {
         "version": 1,
@@ -83,11 +90,11 @@ def save(adb: str, serial: str | None, store_id: str, key: str, before: dict, af
     run(
         adb,
         serial,
-        ["shell", "-T", "content", "write", "--uri", f"content://{AUTHORITY}/v1/save/{request_id}"],
+        ["shell", "-T", "content", "write", "--uri", f"content://{authority}/v1/save/{request_id}"],
         json.dumps(request, separators=(",", ":")).encode(),
     )
     for _ in range(35):
-        result = read_json(adb, serial, f"result/{request_id}")
+        result = read_json(adb, serial, authority, f"result/{request_id}")
         if result["status"] == "ok":
             return
         if result["status"] != "pending":
@@ -96,21 +103,27 @@ def save(adb: str, serial: str | None, store_id: str, key: str, before: dict, af
     raise TimeoutError("Preference save acknowledgement timed out")
 
 
-def toggle_and_restore(adb: str, serial: str | None, store_id: str, key: str) -> None:
-    original = snapshot(adb, serial, store_id)[key]
+def toggle_and_restore(
+    adb: str,
+    serial: str | None,
+    authority: str,
+    store_id: str,
+    key: str,
+) -> None:
+    original = snapshot(adb, serial, authority, store_id)[key]
     if original["type"] != "boolean":
         raise AssertionError(f"{store_id}/{key} is not a boolean")
     changed = {"type": "boolean", "value": not original["value"]}
     changed_on_device = False
     try:
-        save(adb, serial, store_id, key, original, changed)
+        save(adb, serial, authority, store_id, key, original, changed)
         changed_on_device = True
-        if snapshot(adb, serial, store_id)[key] != changed:
+        if snapshot(adb, serial, authority, store_id)[key] != changed:
             raise AssertionError(f"{store_id}/{key} did not change")
     finally:
         if changed_on_device:
-            save(adb, serial, store_id, key, changed, original)
-            if snapshot(adb, serial, store_id)[key] != original:
+            save(adb, serial, authority, store_id, key, changed, original)
+            if snapshot(adb, serial, authority, store_id)[key] != original:
                 raise AssertionError(f"{store_id}/{key} was not restored")
 
 
@@ -118,6 +131,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--adb", default="adb")
     parser.add_argument("--serial")
+    parser.add_argument("--package", default=DEFAULT_PACKAGE)
     parser.add_argument("--keep-installed", action="store_true")
     parser.add_argument(
         "--apk",
@@ -125,6 +139,7 @@ def main() -> None:
         default=Path("sample/build/outputs/apk/debug/sample-debug.apk"),
     )
     arguments = parser.parse_args()
+    authority = f"{arguments.package}.mobilebuild.preferences"
 
     # Older emulator images may start adbd as root. The bridge intentionally accepts only the
     # shell UID, so normalize the test transport before exercising the production protocol.
@@ -136,13 +151,13 @@ def main() -> None:
         run(
             arguments.adb,
             arguments.serial,
-            ["shell", "am", "start", "-W", "-n", f"{PACKAGE}/{ACTIVITY}"],
+            ["shell", "am", "start", "-W", "-n", f"{arguments.package}/{ACTIVITY}"],
         )
 
-        handshake = read_json(arguments.adb, arguments.serial, "handshake")
-        if handshake.get("version") != 1 or handshake.get("packageID") != PACKAGE:
+        handshake = read_json(arguments.adb, arguments.serial, authority, "handshake")
+        if handshake.get("version") != 1 or handshake.get("packageID") != arguments.package:
             raise AssertionError("Unexpected handshake")
-        stores = read_json(arguments.adb, arguments.serial, "stores")
+        stores = read_json(arguments.adb, arguments.serial, authority, "stores")
         descriptors = {store["id"]: store for store in stores["stores"]}
         expected = {"sample-plain", "sample-encrypted", "sample_discovered"}
         if set(descriptors) != expected:
@@ -152,13 +167,19 @@ def main() -> None:
         if descriptors["sample_discovered"].get("kind") != "plain":
             raise AssertionError("Expected the unregistered sample store to be discovered as plain")
 
-        toggle_and_restore(arguments.adb, arguments.serial, "sample-plain", "sample.boolean")
-        toggle_and_restore(arguments.adb, arguments.serial, "sample-encrypted", "secure.enabled")
-        toggle_and_restore(arguments.adb, arguments.serial, "sample_discovered", "discovered.enabled")
+        toggle_and_restore(
+            arguments.adb, arguments.serial, authority, "sample-plain", "sample.boolean",
+        )
+        toggle_and_restore(
+            arguments.adb, arguments.serial, authority, "sample-encrypted", "secure.enabled",
+        )
+        toggle_and_restore(
+            arguments.adb, arguments.serial, authority, "sample_discovered", "discovered.enabled",
+        )
         print("ADB v1 read/write/restore passed for registered and discovered stores.")
     finally:
         if not arguments.keep_installed:
-            run(arguments.adb, arguments.serial, ["uninstall", PACKAGE])
+            run(arguments.adb, arguments.serial, ["uninstall", arguments.package])
 
 
 if __name__ == "__main__":

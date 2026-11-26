@@ -31,10 +31,10 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Build sample
-        run: ./gradlew --no-daemon :sample:assembleDebug
+        run: ./gradlew --no-daemon :sample:assembleDebug :sample:assembleHostControlled
       - name: Enable KVM acceleration
         run: sudo chmod 666 /dev/kvm
-      - name: Exercise plain and encrypted stores
+      - name: Exercise debug and host-controlled stores
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
@@ -42,4 +42,9 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: python3 scripts/device_smoke_test.py --adb "$ANDROID_HOME/platform-tools/adb"
+          script: |
+            python3 scripts/device_smoke_test.py --adb "$ANDROID_HOME/platform-tools/adb"
+            python3 scripts/device_smoke_test.py \
+              --adb "$ANDROID_HOME/platform-tools/adb" \
+              --package io.github.chinmaydash007.mobilebuild.preferences.sample.hostcontrolled \
+              --apk sample/build/outputs/apk/hostControlled/sample-hostControlled.apk

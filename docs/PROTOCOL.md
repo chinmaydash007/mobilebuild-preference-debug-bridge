@@ -8,6 +8,11 @@ com.example.debug.mobilebuild.preferences
 
 All routes use `content://<authority>/v1/…`. Reads run through `adb exec-out content read`; saves stream JSON through stdin to `adb shell -T content write` so values never appear in process arguments.
 
+Before any route is served, the provider requires the Android shell UID and the host app's current
+enablement decision. A disabled host rejects the request with
+`Preference inspection is disabled by the host app`; this is an ADB access failure, not a JSON
+protocol response. The decision is checked again before a streamed save commits.
+
 The complete read/write transport requires Android 9 (API 28) or newer because earlier platform
 releases do not include the streamed `content write` shell command. This transport requirement is
 separate from the library's minimum SDK of 21.

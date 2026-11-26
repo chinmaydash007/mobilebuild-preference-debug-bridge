@@ -5,6 +5,9 @@ import io.github.chinmaydash007.mobilebuild.preferences.PreferenceDebugProvider
 import io.github.chinmaydash007.mobilebuild.preferences.PreferenceStoreRegistry
 
 class SamplePreferenceDebugProvider : PreferenceDebugProvider() {
+    override fun isPreferenceInspectionEnabled(context: Context): Boolean =
+        BuildConfig.ENABLE_PREFERENCE_INSPECTION
+
     override fun registerStores(registry: PreferenceStoreRegistry) {
         registry.register("sample-plain", "Sample preferences") { context ->
             context.getSharedPreferences(MainActivity.PLAIN_STORE, Context.MODE_PRIVATE)

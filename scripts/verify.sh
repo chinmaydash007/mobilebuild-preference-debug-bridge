@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 ./gradlew --no-daemon clean test lint \
   :preference-debug-bridge:assembleRelease \
-  :sample:assembleDebug :sample:assembleRelease \
+  :sample:assembleDebug :sample:assembleHostControlled :sample:assembleRelease \
   stageRelease
 version=$(sed -n 's/^VERSION_NAME=//p' gradle.properties)
 ./gradlew --no-daemon --refresh-dependencies -p consumer-fixture \
