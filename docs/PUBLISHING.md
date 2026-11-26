@@ -37,7 +37,7 @@ This runs tests and lint, builds the AAR and sample variants, stages the publica
 consumer fixture. It does not contact Maven Central.
 
 Before creating a release, run **Signed Maven Central release → Run workflow** from `main`. A manual
-workflow run repeats validation and the API 23/API 35 protocol tests, builds the signed Central ZIP,
+workflow run repeats validation and the API 28/API 35 protocol tests, builds the signed Central ZIP,
 verifies every signature against the committed public key, and uploads the evidence as an Actions
 artifact. Manual dispatch never publishes.
 

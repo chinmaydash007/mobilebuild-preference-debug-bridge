@@ -103,7 +103,7 @@ python3 scripts/device_smoke_test.py \
   --adb "$ANDROID_HOME/platform-tools/adb"
 ```
 
-The smoke test installs the sample, exercises the same `content read` and streamed `content write` commands used by Mobile Build, and restores every value it changes.
+On Android 9 (API 28) or newer, the smoke test installs the sample, exercises the same `content read` and streamed `content write` commands used by Mobile Build, and restores every value it changes. The AAR itself retains a minimum SDK of 21; see the compatibility policy for the protocol distinction.
 
 See [the protocol reference](docs/PROTOCOL.md), [compatibility policy](docs/COMPATIBILITY.md), and [publishing guide](docs/PUBLISHING.md).
 
