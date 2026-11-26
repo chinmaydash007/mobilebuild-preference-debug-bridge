@@ -9,5 +9,6 @@ class FixturePreferenceDebugProvider : PreferenceDebugProvider() {
         registry.register("fixture", "Fixture preferences") { context ->
             context.getSharedPreferences("fixture", Context.MODE_PRIVATE)
         }
+        registry.discoverPlainPreferences()
     }
 }

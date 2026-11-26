@@ -46,12 +46,15 @@ internal object PreferenceStoreWire {
         val entry = JSONObject()
             .put("id", store.id)
             .put("label", store.label)
-            .put("kind", "registered")
         return try {
-            store.open(context).all
-            entry.put("available", true)
+            store.resolve(context)
+            entry.put("kind", store.kind).put("available", true)
+        } catch (unavailable: PreferenceStoreUnavailable) {
+            entry.put("kind", unavailable.exposedKind)
+                .put("available", false)
+                .put("message", unavailable.exposedMessage)
         } catch (_: Exception) {
-            entry.put("available", false)
+            entry.put("kind", store.kind).put("available", false)
                 .put("message", "Store could not be opened with its registered configuration")
         }
     }

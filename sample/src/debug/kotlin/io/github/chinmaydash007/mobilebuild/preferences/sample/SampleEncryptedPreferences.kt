@@ -8,7 +8,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 
 internal object SampleEncryptedPreferences {
-    private const val FILE_NAME = "sample_encrypted"
+    const val FILE_NAME = "sample_encrypted"
 
     fun open(context: Context): SharedPreferences {
         val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)

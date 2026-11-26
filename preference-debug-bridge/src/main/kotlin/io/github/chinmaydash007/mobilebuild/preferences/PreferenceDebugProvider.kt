@@ -122,7 +122,7 @@ abstract class PreferenceDebugProvider : ContentProvider() {
     private fun listStores(): JSONObject {
         val app = appContext()
         val entries = JSONArray()
-        registry.stores().forEach { store ->
+        registry.stores(app).forEach { store ->
             entries.put(PreferenceStoreWire.descriptor(app, store))
         }
         return JSONObject().put("version", BridgeProtocol.VERSION).put("stores", entries)
@@ -130,15 +130,15 @@ abstract class PreferenceDebugProvider : ContentProvider() {
 
     private fun snapshot(id: String): JSONObject {
         val app = appContext()
-        val store = registry.stores().firstOrNull { it.id == id }
+        val store = registry.stores(app).firstOrNull { it.id == id }
             ?: throw FileNotFoundException("Unknown store")
-        val values = try {
-            store.open(app).all
+        val resolved = try {
+            store.resolve(app)
         } catch (_: Exception) {
             throw FileNotFoundException("Store could not be opened")
         }
         val entries = JSONArray()
-        values.toSortedMap().forEach { (key, value) ->
+        resolved.values.toSortedMap().forEach { (key, value) ->
             entries.put(JSONObject().put("key", key).put("value", PreferenceTransaction.typed(value)))
         }
         return JSONObject()
@@ -152,14 +152,15 @@ abstract class PreferenceDebugProvider : ContentProvider() {
             return@synchronized failed("Unsupported protocol version")
         }
         val storeID = request.optString("storeID")
-        val store = registry.stores().firstOrNull { it.id == storeID }
+        val app = appContext()
+        val store = registry.stores(app).firstOrNull { it.id == storeID }
             ?: return@synchronized failed("Store no longer exists")
-        val preferences = try {
-            store.open(appContext())
+        val resolved = try {
+            store.resolve(app)
         } catch (_: Exception) {
             return@synchronized failed("Store could not be opened")
         }
-        PreferenceTransaction.save(preferences, request)
+        PreferenceTransaction.save(resolved.preferences, request)
     }
 
     private fun decodeID(segment: String): String = try {
