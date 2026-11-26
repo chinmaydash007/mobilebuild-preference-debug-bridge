@@ -70,8 +70,12 @@ abstract class PreferenceDebugProvider : ContentProvider() {
 
     private fun checkCaller() {
         val app = context ?: throw SecurityException("No app context")
-        if (!BridgeAccessPolicy.isAllowed(app.applicationInfo.flags, Binder.getCallingUid())) {
-            throw SecurityException("Preference inspection requires an ADB shell and a debug app")
+        val callingUID = Binder.getCallingUid()
+        if (!BridgeAccessPolicy.isDebuggable(app.applicationInfo.flags)) {
+            throw SecurityException("Preference inspection requires a debuggable app")
+        }
+        if (!BridgeAccessPolicy.isShell(callingUID)) {
+            throw SecurityException("Preference inspection requires an ADB shell (caller UID $callingUID)")
         }
     }
 

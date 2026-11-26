@@ -17,24 +17,51 @@ ACTIVITY = "io.github.chinmaydash007.mobilebuild.preferences.sample.MainActivity
 AUTHORITY = f"{PACKAGE}.mobilebuild.preferences"
 
 
-def run(adb: str, serial: str | None, arguments: list[str], data: bytes | None = None) -> bytes:
+def run(
+    adb: str,
+    serial: str | None,
+    arguments: list[str],
+    data: bytes | None = None,
+    *,
+    require_output: bool = False,
+) -> bytes:
+    result = execute(adb, serial, arguments, data)
+    if result.returncode != 0 or (require_output and not result.stdout.strip()):
+        detail = result.stderr.decode(errors="replace").strip()
+        output = result.stdout.decode(errors="replace").strip()
+        raise RuntimeError(detail or output or "adb command returned no output")
+    return result.stdout
+
+
+def execute(
+    adb: str,
+    serial: str | None,
+    arguments: list[str],
+    data: bytes | None = None,
+) -> subprocess.CompletedProcess[bytes]:
     command = [adb]
     if serial:
         command += ["-s", serial]
     command += arguments
-    result = subprocess.run(command, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.decode(errors="replace").strip() or "adb command failed")
-    return result.stdout
+    return subprocess.run(command, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 def read_json(adb: str, serial: str | None, path: str) -> dict:
-    output = run(
+    result = execute(
         adb,
         serial,
         ["exec-out", "content", "read", "--uri", f"content://{AUTHORITY}/v1/{path}"],
     )
-    return json.loads(output.decode())
+    output = result.stdout.decode(errors="replace").strip()
+    error = result.stderr.decode(errors="replace").strip()
+    if result.returncode != 0 or not output:
+        raise RuntimeError(error or output or "adb content read returned no output")
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError as exception:
+        raise RuntimeError(
+            f"adb content read returned invalid JSON: stdout={output!r}, stderr={error!r}",
+        ) from exception
 
 
 def store_segment(store_id: str) -> str:
@@ -98,6 +125,11 @@ def main() -> None:
         default=Path("sample/build/outputs/apk/debug/sample-debug.apk"),
     )
     arguments = parser.parse_args()
+
+    # Older emulator images may start adbd as root. The bridge intentionally accepts only the
+    # shell UID, so normalize the test transport before exercising the production protocol.
+    execute(arguments.adb, arguments.serial, ["unroot"])
+    run(arguments.adb, arguments.serial, ["wait-for-device"])
 
     run(arguments.adb, arguments.serial, ["install", "-r", "-t", str(arguments.apk)])
     try:

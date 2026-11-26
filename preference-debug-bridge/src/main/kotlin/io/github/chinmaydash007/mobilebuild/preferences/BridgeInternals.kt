@@ -16,8 +16,13 @@ internal object BridgeProtocol {
 }
 
 internal object BridgeAccessPolicy {
+    fun isDebuggable(applicationFlags: Int): Boolean =
+        applicationFlags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+    fun isShell(callingUid: Int): Boolean = callingUid == Process.SHELL_UID
+
     fun isAllowed(applicationFlags: Int, callingUid: Int): Boolean =
-        applicationFlags and ApplicationInfo.FLAG_DEBUGGABLE != 0 && callingUid == Process.SHELL_UID
+        isDebuggable(applicationFlags) && isShell(callingUid)
 }
 
 internal object BridgeIO {
